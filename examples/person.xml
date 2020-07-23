@@ -3,7 +3,6 @@
     <age>
         17
     </age>
-    <friends>Bert Ceasar David Elize</friends>
-    adiuvawdiåuv
-    dawdawd
+    <friends count="12">Bert Ceasar David Elize</friends>
+    <partners/>
 </person>

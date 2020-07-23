@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+mod split_unquoted;
+use split_unquoted::SplitUnquoted;
+
 #[derive(Debug)]
 pub struct XMLNode {
     attributes: HashMap<String, String>,
@@ -21,6 +24,8 @@ pub enum Error {
     ContentOutsideRoot(usize),
     MissingClosingTag(String, usize),
     MissingClosingDelimiter(usize),
+    MissingAttributeValue(String, usize),
+    MissingQuotes(String, usize),
 }
 
 impl From<std::io::Error> for Error {
@@ -50,7 +55,7 @@ pub fn load_from_string(string: &str) -> Result<XMLNode, Error> {
 }
 
 /// Loads a xml structure from a slice
-/// Ok variant contains tuple with (prolog, tag_name, tag_data, remaining_from_in)
+/// Ok variant contains a payload with the child node, name prolog, and remaining stringtuple with (prolog, tag_name, tag_data, remaining_from_in)
 fn load_from_slice(string: &str) -> Result<Payload, Error> {
     let opening_del = match string.find("<") {
         Some(v) => v,
@@ -69,12 +74,34 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         None => return Err(Error::MissingClosingDelimiter(999)),
     };
 
-    let tag_name = &string[opening_del + 1..closing_del];
+    let mut tag_parts = SplitUnquoted::split(&string[opening_del + 1..closing_del], ' ');
+
+    let tag_name = tag_parts.next().unwrap();
 
     // Is a comment
     // Attempt to read past comment
-    if (&tag_name[0..1] == "?") {
+    if &tag_name[0..1] == "?" {
         return load_from_slice(&string[closing_del + 1..]);
+    }
+
+    let mut attributes = HashMap::new();
+    for part in tag_parts {
+        let equal_sign = match part.find("=") {
+            Some(v) => v,
+            None => return Err(Error::MissingAttributeValue(part.to_owned(), 999)),
+        };
+
+        // Get key and value from attribute
+        let (k, v) = part.split_at(equal_sign);
+
+        // Remove quotes from value
+        let v = if &v[1..2] == "\"" && &v[v.len() - 1..] == "\"" {
+            &v[2..v.len() - 1]
+        } else {
+            return Err(Error::MissingQuotes(part.to_owned(), 999));
+        };
+        attributes.insert(k.to_owned(), v.to_owned());
+
     }
 
     // Collect the prolog as everything before opening tag exlcluding whitespace
@@ -119,78 +146,10 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         prolog,
         name: tag_name,
         node: Some(XMLNode {
-            attributes: HashMap::new(),
+            attributes,
             children,
             content: content.trim().into(),
         }),
         remaining,
     })
 }
-
-// /// Loads an xml structure from an iterator over chars
-// /// Returns either Error or Ok variant containing a tuple consisting of (content before, tag name, tag data)
-// fn load_from_iter<T: Iterator<Item = char>>(
-//     iter: &mut T,
-// ) -> Result<(String, String, XMLNode), Error> {
-//     let mut prolog = String::with_capacity(128);
-//     let mut children = HashMap::new();
-//     while let Some(c) = iter.next() {
-//         // Opening tag
-//         if c == '<' {
-//             // Tag name
-//             let tag = iter.by_ref().take_while(|c| *c != '>').collect::<String>();
-//             println!("Reached tag: {}", tag);
-//             println!("Prolog so far: '{}'", prolog);
-
-//             if &tag[0..1] == "/" {
-//                 println!("Reached closing tag");
-//                 return Err(Error::NoMoreNodes);
-//             }
-
-//             // Get all content and all children
-//             let mut content = String::with_capacity(128);
-//             let mut attributes = HashMap::new();
-
-//             loop {
-//                 let (prolog, tag, child) = match load_from_iter(iter) {
-//                     Ok(v) => v,
-//                     // The closing tag has been reached
-//                     Err(Error::NoMoreNodes) => break,
-//                     // No children nodes, only text
-//                     Err(Error::ContentOutsideRoot(_)) => {
-//                         println!("Collecting content");
-//                         content
-//                             .push_str(&iter.by_ref().take_while(|c| *c != '<').collect::<String>());
-//                         continue;
-//                     }
-//                     Err(e) => return Err(e),
-//                 };
-//                 content.push_str(&prolog);
-//                 children.insert(tag, child);
-//             }
-
-//             println!("Content so far: '{}'", content);
-
-//             return Ok((
-//                 prolog,
-//                 tag,
-//                 XMLNode {
-//                     children,
-//                     content,
-//                     attributes,
-//                 },
-//             ));
-//         } else {
-//             prolog.push(c);
-//         }
-
-//         // if !c.is_whitespace() {
-//         //     return Err(Error::ContentOutsideRoot(999));
-//         // }
-//         println!("c: {}", c);
-//     }
-
-//     println!("Prolog: {}", prolog);
-
-//     return Err(Error::NoMoreNodes);
-// }
