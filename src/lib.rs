@@ -76,7 +76,10 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     let mut tag_parts = SplitUnquoted::split(&string[opening_del + 1..closing_del], ' ');
 
-    let tag_name = tag_parts.next().unwrap();
+    let tag_name = tag_parts.next().unwrap().trim();
+
+    // Collect the prolog as everything before opening tag excluding whitespace
+    let prolog = string[..opening_del].trim();
 
     // Is a comment
     // Attempt to read past comment
@@ -86,6 +89,12 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     let mut attributes = HashMap::new();
     for part in tag_parts {
+
+        // Last closing of empty node
+        if part == "/" {
+            break;
+        }
+
         let equal_sign = match part.find("=") {
             Some(v) => v,
             None => return Err(Error::MissingAttributeValue(part.to_owned(), 999)),
@@ -101,12 +110,22 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
             return Err(Error::MissingQuotes(part.to_owned(), 999));
         };
         attributes.insert(k.to_owned(), v.to_owned());
-
     }
 
-    // Collect the prolog as everything before opening tag exlcluding whitespace
+    // Empty but valid node
+    if string[opening_del + 1..closing_del].ends_with("/") {
+        return Ok(Payload {
+            prolog,
+            name: &tag_name[0..tag_name.len() - 2],
+            node: Some(XMLNode {
+                children: HashMap::new(),
+                attributes: attributes,
+                content: String::new(),
+            }),
+            remaining: &string[closing_del + 1..],
+        });
+    }
 
-    let prolog = string[..opening_del].trim();
     // Find the closing tag index
     let closing_tag = match string.find(&format!("</{}>", tag_name)) {
         Some(v) => v,

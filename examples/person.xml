@@ -1,8 +1,8 @@
 <person>
     <name>Adam</name>
+    <partners sex="nb" />
     <age>
         17
     </age>
     <friends count="12">Bert Ceasar David Elize</friends>
-    <partners/>
 </person>
