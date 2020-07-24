@@ -1,21 +1,39 @@
+//! XML parser and writeer
+//! This crate can load xml from a file or string and parse it into memory
+//! XML can also be manipulated or created and the written to file
+//! # Loading xml from a file
+//! ```
+//! fn load_message() -> Result<(), xml::Error> {
+//!     let root = xml::from_file("examples/message.xml")?;
+//!     // Since there can multiple nodes/tags with the same name, we need to index twice
+//!     let heading = &root["heading"][0];
+//!     println!("Heading: {}", heading.content);
+//!     // Access attributes
+//!     let lang = root.get_attribute("lang").expect("Missing lang attribute");
+//!     println!("Language: {}", lang);
+//!     Ok(())
+//! }
+//!
+//! ```
+
 use std::collections::HashMap;
-use std::fmt;
 use std::path::Path;
+use std::{fmt, ops};
 
 mod split_unquoted;
 use split_unquoted::SplitUnquoted;
 
 #[derive(Debug)]
-pub struct XMLNode {
+pub struct Node {
     pub tag: String,
-    attributes: HashMap<String, String>,
-    children: HashMap<String, Vec<XMLNode>>,
+    pub attributes: HashMap<String, String>,
+    nodes: HashMap<String, Vec<Node>>,
     pub content: String,
 }
 
 struct Payload<'a> {
     prolog: &'a str,
-    node: Option<XMLNode>,
+    node: Option<Node>,
     remaining: &'a str,
 }
 
@@ -35,25 +53,55 @@ impl From<std::io::Error> for Error {
     }
 }
 
-fn validate_root(root: Result<Payload, Error>) -> Result<XMLNode, Error> {
+fn validate_root(root: Result<Payload, Error>) -> Result<Node, Error> {
     match root {
         Ok(v) if v.prolog.len() != 0 => Err(Error::ContentOutsideRoot(999)),
-        Ok(v) => Ok(v.node.unwrap_or(XMLNode {
+        Ok(v) => Ok(v.node.unwrap_or(Node {
             tag: String::new(),
             content: String::new(),
-            children: HashMap::new(),
+            nodes: HashMap::new(),
             attributes: HashMap::new(),
         })),
         Err(e) => Err(e),
     }
 }
 
-pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<XMLNode, Error> {
+/// Loads an xml structure from a file and returns appropriate errors
+pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Node, Error> {
     validate_root(load_from_slice(&std::fs::read_to_string(path)?))
 }
 
-pub fn load_from_string(string: &str) -> Result<XMLNode, Error> {
+/// Loads an xml structure from a string and returns appropriate errors
+pub fn from_string(string: &str) -> Result<Node, Error> {
     validate_root(load_from_slice(string))
+}
+
+/// Creates a new empty node
+/// Nodes and attributes can be added later
+/// Content is taken owned as to avoid large copy
+/// Tag is not taken owned as it is most often a string literal
+pub fn new(tag: &str, content: String) -> Node {
+    Node {
+        attributes: HashMap::new(),
+        content,
+        tag: tag.to_owned(),
+        nodes: HashMap::new(),
+    }
+}
+
+/// Creates a new node with given tag, attributes content, and child nodes
+pub fn new_filled(
+    tag: &str,
+    attributes: HashMap<String, String>,
+    content: String,
+    nodes: HashMap<String, Vec<Node>>,
+) -> Node {
+    Node {
+        tag: tag.to_owned(),
+        attributes,
+        nodes,
+        content,
+    }
 }
 
 /// Loads a xml structure from a slice
@@ -116,9 +164,9 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     if string[opening_del + 1..closing_del].ends_with("/") {
         return Ok(Payload {
             prolog,
-            node: Some(XMLNode {
+            node: Some(Node {
                 tag: tag_name.to_owned(),
-                children: HashMap::new(),
+                nodes: HashMap::new(),
                 attributes: attributes,
                 content: String::new(),
             }),
@@ -133,22 +181,22 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     };
 
     let mut content = String::with_capacity(512);
-    let mut children = HashMap::new();
+    let mut nodes = HashMap::new();
 
-    // Load the inside contents and children
+    // Load the inside contents and nodes
     let mut buf = &string[closing_del + 1..closing_tag];
 
     while buf.len() != 0 {
         let payload = load_from_slice(buf)?;
 
-        if let Some(child) = payload.node {
-            let v = children
-                .entry(child.tag.clone())
+        if let Some(node) = payload.node {
+            let v = nodes
+                .entry(node.tag.clone())
                 .or_insert(Vec::with_capacity(1));
-            v.push(child);
+            v.push(node);
         }
 
-        // Nothing was read by child, no more nodes
+        // Nothing was read by node, no more nodes
         if payload.remaining.as_ptr() == buf.as_ptr() {
             break;
         }
@@ -165,32 +213,21 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     Ok(Payload {
         prolog,
-        node: Some(XMLNode {
+        node: Some(Node {
             tag: tag_name.to_owned(),
             attributes,
-            children,
+            nodes,
             content: content.trim().into(),
         }),
         remaining,
     })
 }
 
-impl XMLNode {
-    /// Creates a new freestanding node with no attributes and children
-    /// Children and attributes can be added later
-    /// Content is taken owned as to avoid large copy
-    pub fn new(tag: &str, content: String) -> XMLNode {
-        XMLNode {
-            attributes: HashMap::new(),
-            tag: tag.to_owned(),
-            content: content,
-            children: HashMap::new(),
-        }
-    }
-
-    /// Returns a list of all child nodes with the specified tag
-    pub fn get_children(&self, tag: &str) -> Option<&Vec<XMLNode>> {
-        self.children.get(tag)
+impl Node {
+    /// Returns a list of all node nodes with the specified tag
+    /// If no nodes with the specified tag exists, None is returned
+    pub fn get_nodes(&self, tag: &str) -> Option<&Vec<Node>> {
+        self.nodes.get(tag)
     }
 
     /// Adds or updates an attribute
@@ -199,10 +236,14 @@ impl XMLNode {
         self.attributes.insert(key.to_owned(), val.to_owned())
     }
 
-    /// Inserts a new child node with the name of the node field
-    pub fn add_child(&mut self, node: XMLNode) {
+    pub fn get_attribute(&self, key: &str) -> Option<&String> {
+        self.attributes.get(key)
+    }
+
+    /// Inserts a new node node with the name of the node field
+    pub fn add_node(&mut self, node: Node) {
         let v = self
-            .children
+            .nodes
             .entry(node.tag.clone())
             .or_insert(Vec::with_capacity(1));
         v.push(node);
@@ -210,12 +251,12 @@ impl XMLNode {
 
     // Converts an xml structure to a string with whitespace formatting
     pub fn to_string_pretty(&self) -> String {
-        fn internal(node: &XMLNode, depth: usize) -> String {
+        fn internal(node: &Node, depth: usize) -> String {
             if node.tag == "" {
                 return "".to_owned();
             }
 
-            match node.children.len() + node.content.len() {
+            match node.nodes.len() + node.content.len() {
                 0 => format!(
                     "{indent}<{}{}/>\n",
                     node.tag,
@@ -226,24 +267,24 @@ impl XMLNode {
                     indent = " ".repeat(depth * 4)
                 ),
                 _ => format!(
-                    "{indent}<{tag}{attr}>{beg}{children}{content}{end}</{tag}>\n",
+                    "{indent}<{tag}{attr}>{beg}{nodes}{content}{end}</{tag}>\n",
                     tag = node.tag,
                     attr = node
                         .attributes
                         .iter()
                         .map(|(k, v)| format!(" {}=\"{}\"", k, v))
                         .collect::<String>(),
-                    children = node
-                        .children
+                    nodes = node
+                        .nodes
                         .iter()
                         .flat_map(|(_, nodes)| nodes.iter())
                         .map(|node| internal(node, depth + 1))
                         .collect::<String>(),
-                    beg = match node.children.len() {
+                    beg = match node.nodes.len() {
                         0 => "",
                         _ => "\n",
                     },
-                    end = match node.children.len() {
+                    end = match node.nodes.len() {
                         0 => "".to_owned(),
                         _ => " ".repeat(depth * 4),
                     },
@@ -256,13 +297,13 @@ impl XMLNode {
     }
 }
 
-impl std::fmt::Display for XMLNode {
+impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         if self.tag == "" {
             return write!(f, "");
         }
 
-        match self.children.len() + self.content.len() {
+        match self.nodes.len() + self.content.len() {
             0 => write!(
                 f,
                 "<{}{}/>",
@@ -274,21 +315,33 @@ impl std::fmt::Display for XMLNode {
             ),
             _ => write!(
                 f,
-                "<{tag}{attr}>{children}{content}</{tag}>",
+                "<{tag}{attr}>{nodes}{content}</{tag}>",
                 tag = self.tag,
                 attr = self
                     .attributes
                     .iter()
                     .map(|(k, v)| format!(" {}=\"{}\"", k, v))
                     .collect::<String>(),
-                children = self
-                    .children
+                nodes = self
+                    .nodes
                     .iter()
                     .flat_map(|(_, nodes)| nodes.iter())
                     .map(|node| node.to_string())
                     .collect::<String>(),
                 content = self.content,
             ),
+        }
+    }
+}
+
+/// Returns a slice of all node nodes with the specified tag
+/// If no nodes with the specified tag exists, an empty slice is returned
+impl ops::Index<&str> for Node {
+    type Output = [Node];
+    fn index(&self, tag: &str) -> &Self::Output {
+        match self.nodes.get(tag) {
+            Some(v) => &v[..],
+            None => &[],
         }
     }
 }
