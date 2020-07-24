@@ -1,19 +1,20 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::{fmt, ops};
 
 mod split_unquoted;
 use split_unquoted::SplitUnquoted;
 
 #[derive(Debug)]
 pub struct XMLNode {
+    tag: String,
     attributes: HashMap<String, String>,
     children: HashMap<String, XMLNode>,
-    content: String,
+    pub content: String,
 }
 
 struct Payload<'a> {
     prolog: &'a str,
-    name: &'a str,
     node: Option<XMLNode>,
     remaining: &'a str,
 }
@@ -38,6 +39,7 @@ fn validate_root(root: Result<Payload, Error>) -> Result<XMLNode, Error> {
     match root {
         Ok(v) if v.prolog.len() != 0 => Err(Error::ContentOutsideRoot(999)),
         Ok(v) => Ok(v.node.unwrap_or(XMLNode {
+            tag: String::new(),
             content: String::new(),
             children: HashMap::new(),
             attributes: HashMap::new(),
@@ -64,7 +66,6 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
                 prolog: "",
                 node: None,
                 remaining: string,
-                name: "",
             });
         }
     };
@@ -87,9 +88,10 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         return load_from_slice(&string[closing_del + 1..]);
     }
 
+    println!("tag_name: {}", tag_name);
+
     let mut attributes = HashMap::new();
     for part in tag_parts {
-
         // Last closing of empty node
         if part == "/" {
             break;
@@ -116,8 +118,8 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     if string[opening_del + 1..closing_del].ends_with("/") {
         return Ok(Payload {
             prolog,
-            name: &tag_name[0..tag_name.len() - 2],
             node: Some(XMLNode {
+                tag: tag_name.to_owned(),
                 children: HashMap::new(),
                 attributes: attributes,
                 content: String::new(),
@@ -143,7 +145,8 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         let payload = load_from_slice(buf)?;
 
         if let Some(child) = payload.node {
-            children.insert(payload.name.to_owned(), child);
+            println!("Inserting: {}", child.tag);
+            children.insert(child.tag.to_owned(), child);
         }
 
         // Nothing was read by child, no more nodes
@@ -163,12 +166,105 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     Ok(Payload {
         prolog,
-        name: tag_name,
         node: Some(XMLNode {
+            tag: tag_name.to_owned(),
             attributes,
             children,
             content: content.trim().into(),
         }),
         remaining,
     })
+}
+
+impl XMLNode {
+    pub fn get(&self, tag: &str) -> Option<&XMLNode> {
+        self.children.get(tag)
+    }
+
+    /// Inserts a new child node with the given tag
+    /// The name of the node will be overwritten to that of tag
+    /// If a node of that name already is present, it is returned
+    pub fn insert(&mut self, tag: &str, mut node: XMLNode) -> Option<XMLNode> {
+        node.tag = tag.to_owned();
+        self.children.insert(node.tag.to_owned(), node)
+    }
+
+    // Converts an xml structure to a string with whitespace formatting
+    pub fn to_string_pretty(&self) -> String {
+        fn internal(node: &XMLNode, depth: usize) -> String {
+            if node.tag == "" {
+                return "".to_owned();
+            }
+
+            match node.children.len() + node.content.len() {
+                0 => format!(
+                    "{indent}<{}{}/>\n",
+                    node.tag,
+                    node.attributes
+                        .iter()
+                        .map(|(k, v)| format!(" {}=\"{}\"", k, v))
+                        .collect::<String>(),
+                    indent = " ".repeat(depth * 4)
+                ),
+                _ => format!(
+                    "{indent}<{tag}{attr}>{break}{children}{content}</{tag}>\n",
+                    tag = node.tag,
+                    attr = node
+                        .attributes
+                        .iter()
+                        .map(|(k, v)| format!(" {}=\"{}\"", k, v))
+                        .collect::<String>(),
+                    children = node
+                        .children
+                        .iter()
+                        .map(|(_, node)| internal(node, depth + 1))
+                        .collect::<String>(),
+                    break = if node.children.len() != 0 {
+                        format!("\n{}", " ".repeat(depth * 4))
+                    } else {
+                        "".to_owned()
+                    },
+                    content = node.content,
+                    indent = " ".repeat(depth * 4),
+                ),
+            }
+        }
+        internal(&self, 0)
+    }
+}
+
+impl std::fmt::Display for XMLNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        if self.tag == "" {
+            return write!(f, "");
+        }
+
+        match self.children.len() + self.content.len() {
+            0 => write!(
+                f,
+                "<{}{}/>",
+                self.tag,
+                self.attributes
+                    .iter()
+                    .map(|(k, v)| format!(" {}=\"{}\"", k, v))
+                    .collect::<String>(),
+            ),
+            _ => write!(
+                f,
+                "<{tag}{attr}>{children}{content}</{tag}>",
+                tag = self.tag,
+                attr = self
+                    .attributes
+                    .iter()
+                    .map(|(k, v)| format!(" {}=\"{}\"", k, v))
+                    .collect::<String>(),
+                children = self
+                    .children
+                    .iter()
+                    .map(|(_, node)| node.to_string())
+                    .collect::<String>(),
+                content = self.content,
+            ),
+        }
+    }
 }
