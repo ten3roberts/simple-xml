@@ -1,15 +1,15 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::path::Path;
-use std::{fmt, ops};
 
 mod split_unquoted;
 use split_unquoted::SplitUnquoted;
 
 #[derive(Debug)]
 pub struct XMLNode {
-    tag: String,
+    pub tag: String,
     attributes: HashMap<String, String>,
-    children: HashMap<String, XMLNode>,
+    children: HashMap<String, Vec<XMLNode>>,
     pub content: String,
 }
 
@@ -88,8 +88,6 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         return load_from_slice(&string[closing_del + 1..]);
     }
 
-    println!("tag_name: {}", tag_name);
-
     let mut attributes = HashMap::new();
     for part in tag_parts {
         // Last closing of empty node
@@ -140,13 +138,14 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     // Load the inside contents and children
     let mut buf = &string[closing_del + 1..closing_tag];
 
-    // println!("Buf: {}", buf);
     while buf.len() != 0 {
         let payload = load_from_slice(buf)?;
 
         if let Some(child) = payload.node {
-            println!("Inserting: {}", child.tag);
-            children.insert(child.tag.to_owned(), child);
+            let v = children
+                .entry(child.tag.clone())
+                .or_insert(Vec::with_capacity(1));
+            v.push(child);
         }
 
         // Nothing was read by child, no more nodes
@@ -177,16 +176,36 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 }
 
 impl XMLNode {
-    pub fn get(&self, tag: &str) -> Option<&XMLNode> {
+    /// Creates a new freestanding node with no attributes and children
+    /// Children and attributes can be added later
+    /// Content is taken owned as to avoid large copy
+    pub fn new(tag: &str, content: String) -> XMLNode {
+        XMLNode {
+            attributes: HashMap::new(),
+            tag: tag.to_owned(),
+            content: content,
+            children: HashMap::new(),
+        }
+    }
+
+    /// Returns a list of all child nodes with the specified tag
+    pub fn get_children(&self, tag: &str) -> Option<&Vec<XMLNode>> {
         self.children.get(tag)
     }
 
-    /// Inserts a new child node with the given tag
-    /// The name of the node will be overwritten to that of tag
-    /// If a node of that name already is present, it is returned
-    pub fn insert(&mut self, tag: &str, mut node: XMLNode) -> Option<XMLNode> {
-        node.tag = tag.to_owned();
-        self.children.insert(node.tag.to_owned(), node)
+    /// Adds or updates an attribute
+    /// If an attribute with that key already exists it is returned
+    pub fn add_attribute(&mut self, key: &str, val: &str) -> Option<String> {
+        self.attributes.insert(key.to_owned(), val.to_owned())
+    }
+
+    /// Inserts a new child node with the name of the node field
+    pub fn add_child(&mut self, node: XMLNode) {
+        let v = self
+            .children
+            .entry(node.tag.clone())
+            .or_insert(Vec::with_capacity(1));
+        v.push(node);
     }
 
     // Converts an xml structure to a string with whitespace formatting
@@ -207,7 +226,7 @@ impl XMLNode {
                     indent = " ".repeat(depth * 4)
                 ),
                 _ => format!(
-                    "{indent}<{tag}{attr}>{break}{children}{content}</{tag}>\n",
+                    "{indent}<{tag}{attr}>{beg}{children}{content}{end}</{tag}>\n",
                     tag = node.tag,
                     attr = node
                         .attributes
@@ -217,12 +236,16 @@ impl XMLNode {
                     children = node
                         .children
                         .iter()
-                        .map(|(_, node)| internal(node, depth + 1))
+                        .flat_map(|(_, nodes)| nodes.iter())
+                        .map(|node| internal(node, depth + 1))
                         .collect::<String>(),
-                    break = if node.children.len() != 0 {
-                        format!("\n{}", " ".repeat(depth * 4))
-                    } else {
-                        "".to_owned()
+                    beg = match node.children.len() {
+                        0 => "",
+                        _ => "\n",
+                    },
+                    end = match node.children.len() {
+                        0 => "".to_owned(),
+                        _ => " ".repeat(depth * 4),
                     },
                     content = node.content,
                     indent = " ".repeat(depth * 4),
@@ -261,7 +284,8 @@ impl std::fmt::Display for XMLNode {
                 children = self
                     .children
                     .iter()
-                    .map(|(_, node)| node.to_string())
+                    .flat_map(|(_, nodes)| nodes.iter())
+                    .map(|node| node.to_string())
                     .collect::<String>(),
                 content = self.content,
             ),
