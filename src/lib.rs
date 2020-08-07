@@ -13,10 +13,24 @@
 //!     println!("Language: {}", lang);
 //!     Ok(())
 //! }
-//!
 //! ```
+//! ## Creating xml structures
+//! ```
+//! let name = String::from("Tim Roberts");
+//! let health = 50;
+//!
+//! let mut player = simple_xml::new("player", String::new());
+//! player.add_new_node("health", health.to_string());
+//! player.add_new_node("name", name);
+//! // Save to file
+//! player.save_to_file("./player.xml");
+//! ```
+//! For more example, see the tests
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::io::Write;
 use std::path::Path;
 use std::{fmt, ops};
 
@@ -167,7 +181,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
             node: Some(Node {
                 tag: tag_name.to_owned(),
                 nodes: HashMap::new(),
-                attributes: attributes,
+                attributes,
                 content: String::new(),
             }),
             remaining: &string[closing_del + 1..],
@@ -247,6 +261,30 @@ impl Node {
             .entry(node.tag.clone())
             .or_insert(Vec::with_capacity(1));
         v.push(node);
+    }
+
+    /// Inserts a new node into the xml structure
+    /// Does the same thing as node.add_node(simple_xml::new(tag, content));
+    pub fn add_new_node(&mut self, tag: &str, content: String) {
+        self.add_node(new(tag, content));
+    }
+
+    /// This writes an xml structure to a file specified by path
+    /// Uses the non-pretty to_string formatting
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+        let mut file = File::create(path)?;
+        file.write_all(self.to_string().as_bytes())?;
+
+        Ok(())
+    }
+
+    /// This writes an xml structure to a file specified by path
+    /// Uses the pretty to_string_pretty formatting
+    pub fn save_to_file_pretty<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+        let mut file = File::create(path)?;
+        file.write_all(self.to_string_pretty().as_bytes())?;
+
+        Ok(())
     }
 
     // Converts an xml structure to a string with whitespace formatting
