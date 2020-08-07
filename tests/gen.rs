@@ -25,18 +25,18 @@ mod tests {
         "Anthony",
     ];
 
-    fn create_person(num_friends: usize, depth: usize) -> xml::Node {
-        let mut person = xml::new("person", String::new());
-        person.add_node(xml::new(
+    fn create_person(num_friends: usize, depth: usize) -> simple_xml::Node {
+        let mut person = simple_xml::new("person", String::new());
+        person.add_node(simple_xml::new(
             "name",
             NAMES.choose(&mut rand::thread_rng()).unwrap().to_string(),
         ));
-        person.add_node(xml::new("address", "Rose Walk 3".to_owned()));
-        let mut balance = xml::new("balance", "5".to_owned());
+        person.add_node(simple_xml::new("address", "Rose Walk 3".to_owned()));
+        let mut balance = simple_xml::new("balance", "5".to_owned());
         balance.add_attribute("currency", "pound");
         person.add_node(balance);
 
-        let mut friends = xml::new("friends", String::new());
+        let mut friends = simple_xml::new("friends", String::new());
 
         if depth > 0 {
             for _ in 0..num_friends {
@@ -49,9 +49,7 @@ mod tests {
     #[test]
 
     fn generate_person() {
-        println!("{}", xml::from_file("./examples/note.xml").unwrap());
-
-        let person = create_person(10, 2);
+        let person = create_person(10, 5);
         std::fs::write("./examples/person_gen.xml", person.to_string_pretty()).unwrap();
     }
 }

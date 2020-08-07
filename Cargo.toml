@@ -1,6 +1,6 @@
 [package]
-name = "xml"
-version = "0.1.3"
+name = "simple-xml"
+version = "0.1.4"
 authors = ["Tim Roberts <ten3roberts@gmail.com>"]
 edition = "2018"
 

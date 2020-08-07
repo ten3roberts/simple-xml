@@ -1,10 +1,10 @@
-//! XML parser and writeer
+//! XML parser and writer
 //! This crate can load xml from a file or string and parse it into memory
 //! XML can also be manipulated or created and the written to file
-//! # Loading xml from a file
+//! ## Loading xml from a file
 //! ```
-//! fn load_message() -> Result<(), xml::Error> {
-//!     let root = xml::from_file("examples/message.xml")?;
+//! fn load_message() -> Result<(), simple_xml::Error> {
+//!     let root = simple_xml::from_file("examples/message.xml")?;
 //!     // Since there can multiple nodes/tags with the same name, we need to index twice
 //!     let heading = &root["heading"][0];
 //!     println!("Heading: {}", heading.content);

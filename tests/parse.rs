@@ -2,7 +2,8 @@
 mod tests {
     #[test]
     fn parse() {
-        let note = xml::from_file("./examples/note.xml").expect("Failed to parse xml");
+        let note =
+            simple_xml::from_file("./examples/note.xml").expect("Failed to parse simple_xml");
 
         let to = &note["to"][0];
         let from = &note["from"][0];
