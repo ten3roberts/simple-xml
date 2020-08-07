@@ -1,8 +1,9 @@
 [package]
 name = "simple-xml"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Tim Roberts <ten3roberts@gmail.com>"]
 edition = "2018"
+license-file = "LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
