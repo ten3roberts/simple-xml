@@ -1,36 +1,50 @@
-//! This is a module providing the functionality to split a string with a delimiter unless the delimiter is surrounded in quotes
+//! This is a module providing the functionality to split a string with a delimiter function unless the delimiter is surrounded in quotes
 //! The quotes can also be escaped
 
-pub struct SplitUnquoted<'a> {
+pub struct SplitUnquoted<'a, F>
+where
+    F: Fn(char) -> bool,
+{
     in_quotes: bool,
     data: &'a str,
-    del: char,
+    del: F,
 }
 
-impl<'a> SplitUnquoted<'a> {
-    pub fn split(data: &'a str, delimiter: char) -> Self {
+impl<'a, F> SplitUnquoted<'a, F>
+where
+    F: Fn(char) -> bool,
+{
+    pub fn split(data: &'a str, delimiter_func: F) -> Self {
         SplitUnquoted {
             in_quotes: false,
             data: data,
-            del: delimiter,
+            del: delimiter_func,
         }
     }
 }
 
-impl<'a> Iterator for SplitUnquoted<'a> {
+impl<'a, F> Iterator for SplitUnquoted<'a, F>
+where
+    F: Fn(char) -> bool,
+{
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
+        let mut non_del = false;
         for (i, c) in self.data.char_indices() {
             if c == '"' {
                 self.in_quotes = !self.in_quotes;
             }
 
-            if !self.in_quotes && c == self.del {
-                let end = &self.data[..i];
-                // println!("Iter end: '{}', i: {}", end, i);
-                self.data = &self.data[i + 1..];
-                // println!("data: '{}'",&self.data[i..]);
-                return Some(end);
+            if (self.del)(c) {
+                if non_del && !self.in_quotes {
+                    let end = &self.data[..i];
+                    // println!("Iter end: '{}', i: {}", end, i);
+                    self.data = &self.data[i + 1..];
+                    // println!("data: '{}'",&self.data[i..]);
+                    return Some(end);
+                }
+            } else {
+                non_del = true;
             }
         }
         match self.data.len() {

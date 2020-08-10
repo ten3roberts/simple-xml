@@ -135,7 +135,8 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         }
     };
 
-    let mut tag_parts = SplitUnquoted::split(&string[opening_del + 1..closing_del], ' ');
+    let mut tag_parts =
+        SplitUnquoted::split(&string[opening_del + 1..closing_del], |c| c.is_whitespace());
 
     let tag_name = tag_parts.next().unwrap().trim();
 
@@ -172,7 +173,6 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         let v = if &v[1..2] == "\"" && (&v[v.len() - 1..] == "\"" || v.ends_with("\"/")) {
             &v[2..v.len() - 1]
         } else {
-            println!("String: {}", &string[..closing_del]);
             return Err(Error::ParseError(
                 ParseError::MissingQuotes(part.to_owned()),
                 newlines_in_slice(&string[..closing_del]),
@@ -181,7 +181,6 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         attributes.insert(k.to_owned(), v.to_owned());
     }
 
-    // println!("Opening del: {}", &string[opening_del + 1..closing_del + 2]);
     // Empty but valid node
     if string[opening_del + 1..closing_del].ends_with("/") {
         return Ok(Payload {
