@@ -13,6 +13,19 @@ mod tests {
             .get_attribute("lang")
             .expect("Failed to get attribute lang");
 
+        // Test try_get_nodes
+        match note.try_get_nodes("missing_tag") {
+            Err(simple_xml::Error::TagNotFound(a, b)) if a == "note" && b == "missing_tag" => {}
+            Err(simple_xml::Error::TagNotFound(_, _)) => {
+                panic!("Incorrect error for try_get_nodes()");
+            }
+            Err(_) => {
+                panic!("Incorrect error kind");
+            }
+
+            Ok(_) => panic!("Did not expect ok variant"),
+        }
+
         assert_eq!(to.content, "Tove");
         assert_eq!(from.content, "Jani");
         assert_eq!(heading.content, "Reminder");

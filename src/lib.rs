@@ -59,6 +59,8 @@ pub enum Error {
     MissingClosingDelimiter(usize),
     MissingAttributeValue(String, usize),
     MissingQuotes(String, usize),
+    TagNotFound(String, String),
+    AttributeNotFound(String, String),
 }
 
 impl From<std::io::Error> for Error {
@@ -238,10 +240,20 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 }
 
 impl Node {
-    /// Returns a list of all node nodes with the specified tag
+    /// Returns a list of all nodes with the specified tag
     /// If no nodes with the specified tag exists, None is returned
     pub fn get_nodes(&self, tag: &str) -> Option<&Vec<Node>> {
         self.nodes.get(tag)
+    }
+
+    /// Returns a list of all nodes with the specified tag
+    /// If no nodes with the specified tag exists, an Err of TagNotFound is returned containing the parent name and requested node name
+    /// Otherwise, works exactly like get_nodes but can be chained with ? (try operator)
+    pub fn try_get_nodes(&self, tag: &str) -> Result<&Vec<Node>, Error> {
+        match self.nodes.get(tag) {
+            Some(v) => Ok(v),
+            None => Err(Error::TagNotFound(self.tag.to_owned(), tag.to_owned())),
+        }
     }
 
     /// Adds or updates an attribute
@@ -250,8 +262,21 @@ impl Node {
         self.attributes.insert(key.to_owned(), val.to_owned())
     }
 
+    // Gets an attribute by name or returns None if it doesn't exist
     pub fn get_attribute(&self, key: &str) -> Option<&String> {
         self.attributes.get(key)
+    }
+
+    /// Gets an attribute by name or returns an Err of AttributeNotFound containing the parent tag and the requested key
+    /// Otherwise, works exactly like get_nodes but can be chained with ? (try operator)
+    pub fn try_get_attribute(&self, key: &str) -> Result<&String, Error> {
+        match self.attributes.get(key) {
+            Some(v) => Ok(v),
+            None => Err(Error::AttributeNotFound(
+                self.tag.to_owned(),
+                key.to_owned(),
+            )),
+        }
     }
 
     /// Inserts a new node node with the name of the node field
