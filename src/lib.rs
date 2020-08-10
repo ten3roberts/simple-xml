@@ -37,6 +37,10 @@ use std::{fmt, ops};
 mod split_unquoted;
 use split_unquoted::SplitUnquoted;
 
+pub mod error;
+pub use error::Error;
+pub use error::ParseError;
+
 #[derive(Debug)]
 pub struct Node {
     pub tag: String,
@@ -51,27 +55,9 @@ struct Payload<'a> {
     remaining: &'a str,
 }
 
-#[derive(Debug)]
-pub enum Error {
-    IOError(std::io::Error),
-    ContentOutsideRoot(usize),
-    MissingClosingTag(String, usize),
-    MissingClosingDelimiter(usize),
-    MissingAttributeValue(String, usize),
-    MissingQuotes(String, usize),
-    TagNotFound(String, String),
-    AttributeNotFound(String, String),
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::IOError(e)
-    }
-}
-
 fn validate_root(root: Result<Payload, Error>) -> Result<Node, Error> {
     match root {
-        Ok(v) if v.prolog.len() != 0 => Err(Error::ContentOutsideRoot(999)),
+        Ok(v) if v.prolog.len() != 0 => Err(Error::ContentOutsideRoot),
         Ok(v) => Ok(v.node.unwrap_or(Node {
             tag: String::new(),
             content: String::new(),
@@ -120,6 +106,11 @@ pub fn new_filled(
     }
 }
 
+/// Calculates the number of newlines '\n' in a slice
+fn newlines_in_slice(string: &str) -> usize {
+    string.chars().filter(|c| *c == '\n').count()
+}
+
 /// Loads a xml structure from a slice
 /// Ok variant contains a payload with the child node, name prolog, and remaining stringtuple with (prolog, tag_name, tag_data, remaining_from_in)
 fn load_from_slice(string: &str) -> Result<Payload, Error> {
@@ -136,7 +127,12 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     let closing_del = match string.find(">") {
         Some(v) => v,
-        None => return Err(Error::MissingClosingDelimiter(999)),
+        None => {
+            return Err(Error::ParseError(
+                ParseError::MissingClosingDelimiter,
+                newlines_in_slice(&string[..opening_del]),
+            ))
+        }
     };
 
     let mut tag_parts = SplitUnquoted::split(&string[opening_del + 1..closing_del], ' ');
@@ -161,7 +157,12 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
         let equal_sign = match part.find("=") {
             Some(v) => v,
-            None => return Err(Error::MissingAttributeValue(part.to_owned(), 999)),
+            None => {
+                return Err(Error::ParseError(
+                    ParseError::MissingAttributeValue(part.to_owned()),
+                    newlines_in_slice(&string[..closing_del]),
+                ))
+            }
         };
 
         // Get key and value from attribute
@@ -171,7 +172,11 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         let v = if &v[1..2] == "\"" && (&v[v.len() - 1..] == "\"" || v.ends_with("\"/")) {
             &v[2..v.len() - 1]
         } else {
-            return Err(Error::MissingQuotes(part.to_owned(), 999));
+            println!("String: {}", &string[..closing_del]);
+            return Err(Error::ParseError(
+                ParseError::MissingQuotes(part.to_owned()),
+                newlines_in_slice(&string[..closing_del]),
+            ));
         };
         attributes.insert(k.to_owned(), v.to_owned());
     }
@@ -194,7 +199,12 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     // Find the closing tag index
     let closing_tag = match string.find(&format!("</{}>", tag_name)) {
         Some(v) => v,
-        None => return Err(Error::MissingClosingTag(tag_name.to_owned(), 999)),
+        None => {
+            return Err(Error::ParseError(
+                ParseError::MissingClosingTag(tag_name.to_owned()),
+                newlines_in_slice(&string[..closing_del]),
+            ))
+        }
     };
 
     let mut content = String::with_capacity(512);
@@ -202,9 +212,14 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     // Load the inside contents and nodes
     let mut buf = &string[closing_del + 1..closing_tag];
-
+    let mut offset = closing_del;
     while buf.len() != 0 {
-        let payload = load_from_slice(buf)?;
+        let payload = load_from_slice(buf).map_err(|e| match e {
+            Error::ParseError(e, ln) => {
+                Error::ParseError(e, ln + newlines_in_slice(&string[..offset]))
+            }
+            e => e,
+        })?;
 
         if let Some(node) = payload.node {
             let v = nodes
@@ -220,6 +235,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
         // Put what was before the next tag into the content of the parent tag
         content.push_str(&payload.prolog);
+        offset += buf.len() - payload.remaining.len();
         buf = payload.remaining;
     }
 
