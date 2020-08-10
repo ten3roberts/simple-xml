@@ -32,4 +32,15 @@ mod tests {
         assert_eq!(body.content, "Don't forget me this weekend!");
         assert_eq!(lang, "en_US");
     }
+
+    #[test]
+    fn parse_collada() {
+        let root = match simple_xml::from_file("./examples/cube.dae") {
+            Err(e) => {
+                println!("Error: {:?}", e);
+                panic!("")
+            }
+            Ok(v) => v,
+        };
+    }
 }

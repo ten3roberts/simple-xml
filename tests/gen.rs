@@ -49,7 +49,7 @@ mod tests {
     #[test]
 
     fn generate_person() {
-        let person = create_person(10, 5);
+        let person = create_person(10, 2);
         std::fs::write("./examples/person_gen.xml", person.to_string_pretty()).unwrap();
     }
 }

@@ -168,7 +168,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         let (k, v) = part.split_at(equal_sign);
 
         // Remove quotes from value
-        let v = if &v[1..2] == "\"" && &v[v.len() - 1..] == "\"" {
+        let v = if &v[1..2] == "\"" && (&v[v.len() - 1..] == "\"" || v.ends_with("\"/")) {
             &v[2..v.len() - 1]
         } else {
             return Err(Error::MissingQuotes(part.to_owned(), 999));
@@ -176,6 +176,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         attributes.insert(k.to_owned(), v.to_owned());
     }
 
+    // println!("Opening del: {}", &string[opening_del + 1..closing_del + 2]);
     // Empty but valid node
     if string[opening_del + 1..closing_del].ends_with("/") {
         return Ok(Payload {
