@@ -43,4 +43,38 @@ mod tests {
             Ok(v) => v,
         };
     }
+
+    #[test]
+    fn parse_graph() {
+        let graph = simple_xml::from_file("./examples/graph.xml").expect("Failed to parse graph.xml");
+
+        assert_eq!(graph["node"].len(), 4);
+        assert_eq!(graph["node"][0].attributes["id"], "n1");
+        assert_eq!(graph["node"][0]["label"][0].content, "Start");
+        assert_eq!(graph["node"][1].attributes["id"], "n2");
+        assert_eq!(graph["node"][2].attributes["id"], "n3");
+        assert_eq!(graph["node"][3].attributes["id"], "n4");
+
+        assert_eq!(graph["init"][0].attributes["ref"], "n1");
+
+        assert_eq!(graph["edge"][0].attributes["id"], "e1");
+        assert_eq!(graph["edge"][0].attributes["from"], "n1");
+        assert_eq!(graph["edge"][0].attributes["to"], "n2");
+
+        assert_eq!(graph["edge"][1].attributes["id"], "e2");
+        assert_eq!(graph["edge"][1].attributes["from"], "n2");
+        assert_eq!(graph["edge"][1].attributes["to"], "n3");
+
+        assert_eq!(graph["edge"][2].attributes["id"], "e3");
+        assert_eq!(graph["edge"][2].attributes["from"], "n3");
+        assert_eq!(graph["edge"][2].attributes["to"], "n1");
+
+        assert_eq!(graph["edge"][3].attributes["id"], "e4");
+        assert_eq!(graph["edge"][3].attributes["from"], "n3");
+        assert_eq!(graph["edge"][3].attributes["to"], "n4");
+
+        assert_eq!(graph["edge"][4].attributes["id"], "e5");
+        assert_eq!(graph["edge"][4].attributes["from"], "n4");
+        assert_eq!(graph["edge"][4].attributes["to"], "n3");
+    }
 }

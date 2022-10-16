@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<graph>
+    <node id="n1">
+        <label>Start</label>
+    </node>
+    <node id="n2"/>
+    <node id="n3"/>
+    <node id="n4"/>
+    <init ref="n1"/>
+    <edge id="e1" from="n1" to="n2"/>
+    <edge id="e2" from="n2" to="n3"/>
+    <edge id="e3" from="n3" to="n1"/>
+    <edge id="e4" from="n3" to="n4"/>
+    <edge id="e5" from="n4" to="n3"/>
+</graph>
