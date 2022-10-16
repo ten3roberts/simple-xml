@@ -135,8 +135,15 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         }
     };
 
+    // Do not consider / of empty as a part
+    let attr_end = if &string[closing_del - 1..closing_del] == "/" {
+        closing_del - 1
+    } else {
+        closing_del
+    };
+
     let mut tag_parts =
-        SplitUnquoted::split(&string[opening_del + 1..closing_del], |c| c.is_whitespace());
+        SplitUnquoted::split(&string[opening_del + 1..attr_end], |c| c.is_whitespace());
 
     let tag_name = tag_parts.next().unwrap().trim();
 
@@ -151,11 +158,6 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     let mut attributes = HashMap::new();
     for part in tag_parts {
-        // Last closing of empty node
-        if part == "/" {
-            break;
-        }
-
         let equal_sign = match part.find("=") {
             Some(v) => v,
             None => {
