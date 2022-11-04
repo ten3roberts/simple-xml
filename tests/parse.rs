@@ -35,7 +35,7 @@ mod tests {
 
     #[test]
     fn parse_collada() {
-        let root = match simple_xml::from_file("./examples/cube.dae") {
+        let _root = match simple_xml::from_file("./examples/cube.dae") {
             Err(e) => {
                 println!("Error: {:?}", e);
                 panic!("")
@@ -46,7 +46,8 @@ mod tests {
 
     #[test]
     fn parse_graph() {
-        let graph = simple_xml::from_file("./examples/graph.xml").expect("Failed to parse graph.xml");
+        let graph =
+            simple_xml::from_file("./examples/graph.xml").expect("Failed to parse graph.xml");
 
         assert_eq!(graph["node"].len(), 4);
         assert_eq!(graph["node"][0].attributes["id"], "n1");

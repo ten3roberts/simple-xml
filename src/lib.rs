@@ -57,7 +57,7 @@ struct Payload<'a> {
 
 fn validate_root(root: Result<Payload, Error>) -> Result<Node, Error> {
     match root {
-        Ok(v) if v.prolog.len() != 0 => Err(Error::ContentOutsideRoot),
+        Ok(v) if !v.prolog.is_empty() => Err(Error::ContentOutsideRoot),
         Ok(v) => Ok(v.node.unwrap_or(Node {
             tag: String::new(),
             content: String::new(),
@@ -114,7 +114,7 @@ fn newlines_in_slice(string: &str) -> usize {
 /// Loads a xml structure from a slice
 /// Ok variant contains a payload with the child node, name prolog, and remaining stringtuple with (prolog, tag_name, tag_data, remaining_from_in)
 fn load_from_slice(string: &str) -> Result<Payload, Error> {
-    let opening_del = match string.find("<") {
+    let opening_del = match string.find('<') {
         Some(v) => v,
         None => {
             return Ok(Payload {
@@ -125,7 +125,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         }
     };
 
-    let closing_del = match string.find(">") {
+    let closing_del = match string.find('>') {
         Some(v) => v,
         None => {
             return Err(Error::ParseError(
@@ -158,7 +158,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     let mut attributes = HashMap::new();
     for part in tag_parts {
-        let equal_sign = match part.find("=") {
+        let equal_sign = match part.find('=') {
             Some(v) => v,
             None => {
                 return Err(Error::ParseError(
@@ -184,7 +184,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     }
 
     // Empty but valid node
-    if string[opening_del + 1..closing_del].ends_with("/") {
+    if string[opening_del + 1..closing_del].ends_with('/') {
         return Ok(Payload {
             prolog,
             node: Some(Node {
@@ -214,7 +214,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
     // Load the inside contents and nodes
     let mut buf = &string[closing_del + 1..closing_tag];
     let mut offset = closing_del;
-    while buf.len() != 0 {
+    while !buf.is_empty() {
         let payload = load_from_slice(buf).map_err(|e| match e {
             Error::ParseError(e, ln) => {
                 Error::ParseError(e, ln + newlines_in_slice(&string[..offset]))
@@ -223,9 +223,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         })?;
 
         if let Some(node) = payload.node {
-            let v = nodes
-                .entry(node.tag.clone())
-                .or_insert(Vec::with_capacity(1));
+            let v: &mut Vec<_> = nodes.entry(node.tag.clone()).or_default();
             v.push(node);
         }
 
@@ -235,7 +233,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
         }
 
         // Put what was before the next tag into the content of the parent tag
-        content.push_str(&payload.prolog);
+        content.push_str(payload.prolog);
         offset += buf.len() - payload.remaining.len();
         buf = payload.remaining;
     }
@@ -299,10 +297,7 @@ impl Node {
 
     /// Inserts a new node node with the name of the node field
     pub fn add_node(&mut self, node: Node) {
-        let v = self
-            .nodes
-            .entry(node.tag.clone())
-            .or_insert(Vec::with_capacity(1));
+        let v = self.nodes.entry(node.tag.clone()).or_default();
         v.push(node);
     }
 
@@ -333,7 +328,7 @@ impl Node {
     // Converts an xml structure to a string with whitespace formatting
     pub fn to_string_pretty(&self) -> String {
         fn internal(node: &Node, depth: usize) -> String {
-            if node.tag == "" {
+            if node.tag.is_empty() {
                 return "".to_owned();
             }
 
@@ -374,13 +369,13 @@ impl Node {
                 ),
             }
         }
-        internal(&self, 0)
+        internal(self, 0)
     }
 }
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        if self.tag == "" {
+        if self.tag.is_empty() {
             return write!(f, "");
         }
 

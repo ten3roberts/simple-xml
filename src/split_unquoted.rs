@@ -17,7 +17,7 @@ where
     pub fn split(data: &'a str, delimiter_func: F) -> Self {
         SplitUnquoted {
             in_quotes: false,
-            data: data,
+            data,
             del: delimiter_func,
         }
     }
@@ -51,7 +51,7 @@ where
             0 => None,
             // No more quotes left, return what is over and end iterator
             _ => {
-                let last = &self.data[..];
+                let last = self.data;
                 self.data = &self.data[..0];
                 Some(last)
             }
