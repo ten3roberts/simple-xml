@@ -336,20 +336,13 @@ impl Node {
                 0 => format!(
                     "{indent}<{}{}/>\n",
                     node.tag,
-                    node.attributes
-                        .iter()
-                        .map(|(k, v)| format!(" {}=\"{}\"", k, v))
-                        .collect::<String>(),
+                    format_attrs(&node.attributes),
                     indent = " ".repeat(depth * 4)
                 ),
                 _ => format!(
                     "{indent}<{tag}{attr}>{beg}{nodes}{content}{end}</{tag}>\n",
                     tag = node.tag,
-                    attr = node
-                        .attributes
-                        .iter()
-                        .map(|(k, v)| format!(" {}=\"{}\"", k, v))
-                        .collect::<String>(),
+                    attr = format_attrs(&node.attributes),
                     nodes = node
                         .nodes
                         .iter()
@@ -373,6 +366,17 @@ impl Node {
     }
 }
 
+fn format_attrs<'a>(attrs: impl IntoIterator<Item = (&'a String, &'a String)>) -> String {
+    attrs.into_iter().fold(String::new(), |mut output, (k, v)| {
+        output.push(' ');
+        output.push_str(k);
+        output.push_str("=\"");
+        output.push_str(v);
+        output.push('"');
+        output
+    })
+}
+
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         if self.tag.is_empty() {
@@ -380,24 +384,12 @@ impl std::fmt::Display for Node {
         }
 
         match self.nodes.len() + self.content.len() {
-            0 => write!(
-                f,
-                "<{}{}/>",
-                self.tag,
-                self.attributes
-                    .iter()
-                    .map(|(k, v)| format!(" {}=\"{}\"", k, v))
-                    .collect::<String>(),
-            ),
+            0 => write!(f, "<{}{}/>", self.tag, format_attrs(&self.attributes)),
             _ => write!(
                 f,
                 "<{tag}{attr}>{nodes}{content}</{tag}>",
                 tag = self.tag,
-                attr = self
-                    .attributes
-                    .iter()
-                    .map(|(k, v)| format!(" {}=\"{}\"", k, v))
-                    .collect::<String>(),
+                attr = format_attrs(&self.attributes),
                 nodes = self
                     .nodes
                     .iter()
