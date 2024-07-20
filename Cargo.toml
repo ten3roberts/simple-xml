@@ -9,5 +9,8 @@ repository = "https://github.com/ten3roberts/simple-xml"
 description = "A dead simple xml parser"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dependencies]
+thiserror = "1.0"
+
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.5"
