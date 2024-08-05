@@ -45,6 +45,12 @@ mod tests {
     }
 
     #[test]
+    fn parse_comment() {
+        let _comment = simple_xml::from_file("examples/comment.xml")
+            .expect("Failed to parse comment.xml");
+    }
+
+    #[test]
     fn parse_graph() {
         let graph =
             simple_xml::from_file("./examples/graph.xml").expect("Failed to parse graph.xml");

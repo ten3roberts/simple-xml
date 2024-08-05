@@ -152,7 +152,7 @@ fn load_from_slice(string: &str) -> Result<Payload, Error> {
 
     // Is a comment
     // Attempt to read past comment
-    if &tag_name[0..1] == "?" {
+    if &tag_name[0..1] == "?" || &tag_name[0..1] == "!" {
         return load_from_slice(&string[closing_del + 1..]);
     }
 
